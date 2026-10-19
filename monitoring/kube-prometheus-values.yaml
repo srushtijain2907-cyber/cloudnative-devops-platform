@@ -1,0 +1,6 @@
+grafana:
+  adminPassword: "change-me-now"   # use a Kubernetes Secret for anything beyond a demo
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false

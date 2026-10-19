@@ -1,0 +1,11 @@
+# Updated automatically by GitHub Actions after each successful build.
+replicaCount: 2
+
+image:
+  repository: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/cloudnative-demo
+  tag: "REPLACED_BY_CI"
+  pullPolicy: IfNotPresent
+
+serviceMonitor:
+  enabled: true
+  releaseLabel: monitoring

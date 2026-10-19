@@ -1,0 +1,3 @@
+region      = "ap-south-1"
+github_repo = "YOUR_GITHUB_USERNAME/cloudnative-devops-platform"
+my_ip_cidr  = "203.0.113.10/32"   # find yours: Invoke-RestMethod https://checkip.amazonaws.com

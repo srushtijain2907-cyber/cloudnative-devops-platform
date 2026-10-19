@@ -1,0 +1,82 @@
+name: CloudNative CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["helm/**", "**.md"]   # avoids a loop when CI commits the new image tag
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1          # change to your region
+  ECR_REPOSITORY: cloudnative-demo
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Run tests
+        working-directory: app
+        run: npm test
+
+      - name: Build Docker image
+        run: docker build -t cloudnative-demo:${{ github.sha }} ./app
+
+      - name: Trivy vulnerability scan (fails on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: cloudnative-demo:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  publish-and-update-gitops:
+    # Runs only on main, and only after you set the AWS_ROLE_ARN repo variable
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_ROLE_ARN != ''
+    needs: test-and-scan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # OIDC to AWS (no stored access keys)
+      contents: write     # commit the new image tag
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          docker build -t $IMAGE:${{ github.sha }} ./app
+          docker push $IMAGE:${{ github.sha }}
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Update image tag in GitOps values
+        run: |
+          sed -i "s|^  repository:.*|  repository: ${IMAGE}|" helm/cloudnative-demo/values-prod.yaml
+          sed -i "s|^  tag:.*|  tag: \"${{ github.sha }}\"|" helm/cloudnative-demo/values-prod.yaml
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/cloudnative-demo/values-prod.yaml
+          git commit -m "ci: deploy ${{ github.sha }} [skip ci]"
+          git push
