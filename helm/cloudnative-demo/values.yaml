@@ -15,5 +15,6 @@ resources:
 
 # Needs Prometheus Operator CRDs (installed by kube-prometheus-stack). Off for plain local runs.
 serviceMonitor:
-  enabled: false
+  enabled: true
   releaseLabel: monitoring   # must match the Helm release name of kube-prometheus-stack
+
